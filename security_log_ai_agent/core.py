@@ -493,30 +493,41 @@ def build_ip_summary(logs):
 
 
 def build_timeline(logs):
-    buckets = defaultdict(lambda: {
-        "login_success": 0,
-        "login_failed": 0,
-        "logout": 0,
-    })
+    """
+    대시보드용 로그인 실패 그래프 데이터.
+    로그인 실패가 실제로 발생한 1분 구간만 표시합니다.
+
+    탐지 엔진은 이 그래프 데이터가 아니라 원본 로그를 사용하므로
+    Sliding Window 탐지와 위험도 계산에는 영향을 주지 않습니다.
+    """
+    buckets = defaultdict(int)
 
     for log in logs:
-        key = log["dt"].strftime("%H:%M")
-        buckets[key][log["event"]] += 1
+        if log["event"] != "login_failed":
+            continue
 
-    points = []
-    for key in sorted(buckets):
-        points.append({
+        key = log["dt"].strftime("%H:%M")
+        buckets[key] += 1
+
+    points = [
+        {
             "label": key,
-            **buckets[key],
-        })
+            "login_success": 0,
+            "login_failed": count,
+            "logout": 0,
+        }
+        for key, count in sorted(buckets.items())
+        if count > 0
+    ]
 
     max_failed = max((x["login_failed"] for x in points), default=1)
 
     for p in points:
-        p["failed_percent"] = int((p["login_failed"] / max_failed) * 100) if max_failed else 0
+        p["failed_percent"] = int(
+            (p["login_failed"] / max_failed) * 100
+        ) if max_failed else 0
 
     return points
-
 
 def analyze_log_file(filename):
     logs, broken_lines = load_logs(filename)
