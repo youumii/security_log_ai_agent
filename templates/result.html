@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>분석 결과</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="page">
+  <header class="result-header">
+    <div>
+      <p class="eyebrow">ANALYSIS RESULT</p>
+      <h1>보안 로그 분석 결과</h1>
+      <p class="muted">{{ result.source_file }} · {{ result.analyzed_at }}</p>
+    </div>
+    <a class="ghost-btn" href="{{ url_for('index') }}">새 로그 분석</a>
+  </header>
+
+  <section class="metric-grid">
+    <article class="card metric">
+      <span>정상 로그</span>
+      <strong>{{ result.total_valid_logs }}</strong>
+    </article>
+    <article class="card metric">
+      <span>로그인 성공</span>
+      <strong>{{ result.event_counts.login_success }}</strong>
+    </article>
+    <article class="card metric">
+      <span>로그인 실패</span>
+      <strong>{{ result.event_counts.login_failed }}</strong>
+    </article>
+    <article class="card metric">
+      <span>탐지 이벤트</span>
+      <strong>{{ result.detections|length }}</strong>
+    </article>
+  </section>
+
+  <section class="card risk-card">
+    <div>
+      <p class="eyebrow">WEIGHTED RISK SCORE</p>
+      <h2 class="risk-title">종합 위험도</h2>
+      <span class="risk-pill risk-{{ result.overall_risk.risk|lower }}">
+        {{ result.overall_risk.risk }}
+      </span>
+    </div>
+    <div class="risk-score-area">
+      <div class="score">{{ result.overall_risk.score }}<small>/100</small></div>
+      <div class="risk-scale" aria-label="위험도 등급 기준">
+        <span class="scale-low">LOW 0–19</span>
+        <span class="scale-sep">·</span>
+        <span class="scale-medium">MEDIUM 20–49</span>
+        <span class="scale-sep">·</span>
+        <span class="scale-high">HIGH 50–100</span>
+      </div>
+    </div>
+  </section>
+
+  <details class="card risk-details">
+    <summary class="risk-details-summary">
+      <div>
+        <p class="eyebrow">RISK BREAKDOWN</p>
+        <strong>점수 산정 근거 보기</strong>
+      </div>
+      <span class="summary-action">펼치기</span>
+    </summary>
+
+    <div class="risk-details-body">
+      <p class="muted risk-details-description">
+        전체 로그 수로 나누지 않고, 공격의 <strong>강도</strong>와 실제 침해 가능성을 높이는 <strong>영향도</strong>를 각각 평가합니다.
+      </p>
+
+      <div class="risk-dimension-grid">
+        <section class="risk-dimension">
+          <div class="dimension-head">
+            <div>
+              <span class="dimension-label">{{ result.overall_risk.intensity.label }}</span>
+              <p>{{ result.overall_risk.intensity.description }}</p>
+            </div>
+            <strong>{{ result.overall_risk.intensity.score }} / 50</strong>
+          </div>
+
+          <div class="risk-breakdown">
+            {% for item in result.overall_risk.intensity['items'] %}
+              <div class="risk-row {% if item.score == 0 %}inactive{% endif %}">
+                <div class="risk-row-text">
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ item.reason }}</span>
+                </div>
+                <div class="risk-row-score">
+                  <b>+{{ item.score }}</b>
+                  <span>/ {{ item.max_score }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="risk-dimension">
+          <div class="dimension-head">
+            <div>
+              <span class="dimension-label">{{ result.overall_risk.impact.label }}</span>
+              <p>{{ result.overall_risk.impact.description }}</p>
+            </div>
+            <strong>{{ result.overall_risk.impact.score }} / 50</strong>
+          </div>
+
+          <div class="risk-breakdown">
+            {% for item in result.overall_risk.impact['items'] %}
+              <div class="risk-row {% if item.score == 0 %}inactive{% endif %}">
+                <div class="risk-row-text">
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ item.reason }}</span>
+                </div>
+                <div class="risk-row-score">
+                  <b>+{{ item.score }}</b>
+                  <span>/ {{ item.max_score }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+      </div>
+
+      <div class="risk-total">
+        <span>공격 강도 + 영향도</span>
+        <strong>{{ result.overall_risk.intensity.score }} + {{ result.overall_risk.impact.score }} = {{ result.overall_risk.score }} / 100</strong>
+      </div>
+    </div>
+  </details>
+
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">02 · EXPLAIN</p>
+        <h2>AI 분석 요약</h2>
+      </div>
+      <span class="mode-badge">{{ result.ai_mode }}</span>
+    </div>
+    <p class="ai-text">{{ result.ai_summary }}</p>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">03 · TIMELINE</p>
+        <h2>시간대별 로그인 실패</h2>
+      </div>
+      <p class="muted">로그인 실패가 발생한 시간대만 표시 · 최대 실패값을 100%로 환산한 상대 그래프</p>
+    </div>
+
+    {% if result.timeline %}
+      <div class="chart-meta">
+        <span>분당 로그인 실패 횟수</span>
+        <b>최대 {{ result.timeline | map(attribute='login_failed') | max }}건</b>
+      </div>
+
+      <div class="timeline-chart">
+        <div class="chart-grid" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+
+        <div class="chart-bars">
+          {% for p in result.timeline %}
+            <div class="bar-column" title="{{ p.label }} / 로그인 실패 {{ p.login_failed }}건">
+              <div class="bar-value">{{ p.login_failed }}</div>
+              <div class="bar-track">
+                <div
+                  class="bar-fill {% if p.login_failed == 0 %}is-zero{% endif %}"
+                  style="height: {{ p.failed_percent }}%;"
+                ></div>
+              </div>
+              <div class="bar-label">{{ p.label }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <p class="muted">로그인 실패 기록이 없습니다.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">04 · DETECTIONS</p>
+        <h2>탐지 이벤트</h2>
+        <p class="muted">점수는 종합 위험도에서만 계산하며, 이 영역은 탐지 사실과 근거를 보여줍니다.</p>
+      </div>
+    </div>
+
+    {% if result.detections %}
+      <div class="detection-list">
+      {% for d in result.detections %}
+        <article class="detection">
+          <div class="detection-title">
+            <div>
+              <strong class="detection-type">{{ d.type }}</strong>
+              <p>{{ d.reason }}</p>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <div><span>사용자</span><b>{{ d.user }}</b></div>
+            <div><span>IP</span><b>{{ d.ip }}</b></div>
+            <div><span>횟수</span><b>{{ d.count }}</b></div>
+            <div><span>기간</span><b>{{ d.start }}<br>{{ d.end }}</b></div>
+          </div>
+        </article>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">현재 규칙 기준으로 탐지된 이상 이벤트가 없습니다.</p>
+    {% endif %}
+  </section>
+
+  <section class="split">
+    <section class="card">
+      <p class="eyebrow">USER VIEW</p>
+      <h2>사용자별 통계</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>사용자</th><th>성공</th><th>실패</th><th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for u in result.user_summary %}
+            <tr>
+              <td>{{ u.user }}</td>
+              <td>{{ u.login_success }}</td>
+              <td>{{ u.login_failed }}</td>
+              <td>{{ u.ips|join(", ") }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="eyebrow">IP VIEW</p>
+      <h2>IP별 통계</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>IP</th><th>성공</th><th>실패</th><th>계정</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for i in result.ip_summary %}
+            <tr>
+              <td>{{ i.ip }}</td>
+              <td>{{ i.login_success }}</td>
+              <td>{{ i.login_failed }}</td>
+              <td>{{ i.users|join(", ") }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <section class="card report-card">
+    <div>
+      <p class="eyebrow">05 · REPORT</p>
+      <h2>자동 보고서</h2>
+      <p class="muted">분석 결과 전체를 TXT 또는 JSON으로 저장합니다.</p>
+    </div>
+    <div class="actions">
+      <a class="primary-btn" href="{{ url_for('report', filename=txt_name) }}">TXT 다운로드</a>
+      <a class="ghost-btn" href="{{ url_for('report', filename=json_name) }}">JSON 다운로드</a>
+    </div>
+  </section>
+
+  {% if result.broken_lines %}
+  <section class="card">
+    <p class="eyebrow">PARSER QUALITY</p>
+    <h2>깨진 로그 {{ result.broken_count }}건</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>줄</th><th>원문</th><th>이유</th></tr></thead>
+        <tbody>
+        {% for b in result.broken_lines %}
+          <tr>
+            <td>{{ b.line_number }}</td>
+            <td>{{ b.line }}</td>
+            <td>{{ b.reason }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+</div>
+</body>
+</html>
